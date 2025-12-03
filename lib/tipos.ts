@@ -4,13 +4,32 @@ export type StatusOrdem = "pendente" | "em_progresso" | "concluido" | "cancelado
 export type StatusTaref = "nao_iniciada" | "em_andamento" | "concluida" | "bloqueada"
 export type TipoServico = "manutencao" | "reparo" | "instalacao" | "diagnostico"
 
+export type Telefone = {
+  id: number
+  numero: string
+  cliente_id: number
+  created_at: string
+  updated_at: string
+}
+
+export type Endereco = {
+  id: number
+  logradouro: string
+  cep: string
+  cidade: string
+  estado: string
+  cliente_id: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Cliente {
-  id: string
+  id: number
   nome: string
-  email: string
-  telefone: string
-  endereco: string
+  email?: string | null
   dataRegistro: string
+  telefones: Telefone[]
+  enderecos: Endereco[]
 }
 
 export interface Tecnico {
