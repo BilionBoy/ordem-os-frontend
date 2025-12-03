@@ -58,6 +58,12 @@ export interface Tarefa {
   dataFim?: string
 }
 
+export interface Servico {
+  id: string
+  nome: string
+  valor: number
+}
+
 export interface OrdemServico {
   id: string
   numeroOrdem: string

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,26 +14,93 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { getTecnicos, createTecnico } from "@/lib/api/tecnicos"
+import { Plus, Phone, Edit, Trash2 } from "lucide-react"
 import type { Tecnico } from "@/lib/tipos"
-import { tenicosMock } from "@/lib/dados-mockados"
-import { Plus, Edit, Trash2, Phone, Mail } from "lucide-react"
 
 export default function ListaTecnicos() {
-  const [tecnicos, setTecnicos] = useState<Tecnico[]>(tenicosMock)
+  const [tecnicos, setTecnicos] = useState<Tecnico[]>([])
   const [busca, setBusca] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const [novoTecnico, setNovoTecnico] = useState({
+    nome: "",
+    telefone: "",
+    especialidades: [] as string[],
+    especialidadeInput: "",
+  })
+
+  useEffect(() => {
+    async function fetchTecnicos() {
+      try {
+        setLoading(true)
+        const data = await getTecnicos()
+        setTecnicos(data)
+      } catch (err) {
+        setError("Erro ao carregar técnicos")
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchTecnicos()
+  }, [])
+
+  const handleAddEspecialidade = () => {
+    if (novoTecnico.especialidadeInput.trim()) {
+      setNovoTecnico((s) => ({
+        ...s,
+        especialidades: [...s.especialidades, s.especialidadeInput.trim()],
+        especialidadeInput: "",
+      }))
+    }
+  }
+
+  const handleRemoveEspecialidade = (idx: number) => {
+    setNovoTecnico((s) => ({
+      ...s,
+      especialidades: s.especialidades.filter((_, i) => i !== idx),
+    }))
+  }
+
+  const resetNovoTecnico = () =>
+    setNovoTecnico({
+      nome: "",
+      telefone: "",
+      especialidades: [],
+      especialidadeInput: "",
+    })
+
+  const handleAddTecnico = async () => {
+    try {
+      setSaving(true)
+      const criado = await createTecnico({
+        nome: novoTecnico.nome.trim(),
+        telefone: novoTecnico.telefone.trim(),
+        especialidades: novoTecnico.especialidades,
+      })
+      setTecnicos((prev) => [criado, ...prev])
+      resetNovoTecnico()
+      setOpen(false)
+    } catch (e) {
+      console.error(e)
+      setError("Erro ao criar técnico")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="p-6">Carregando...</div>
+  if (error) return <div className="p-6 text-destructive">{error}</div>
 
   const tecnicosFiltrados = tecnicos.filter(
-    (t) => t.nome.toLowerCase().includes(busca.toLowerCase()) || t.email.toLowerCase().includes(busca.toLowerCase()),
+    (t) =>
+      t.nome.toLowerCase().includes(busca.toLowerCase()) ||
+      t.telefone.toLowerCase().includes(busca.toLowerCase()),
   )
-
-  const getStatusColor = (status: string) => {
-    const cores: { [key: string]: string } = {
-      disponivel: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200",
-      ocupado: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200",
-      ausente: "bg-gray-100 text-gray-800 dark:bg-gray-950 dark:text-gray-200",
-    }
-    return cores[status] || ""
-  }
 
   return (
     <div className="p-6 space-y-6">
@@ -42,9 +109,9 @@ export default function ListaTecnicos() {
           <h1 className="text-3xl font-bold mb-2">Técnicos</h1>
           <p className="text-muted-foreground">Gerencie os técnicos do sistema</p>
         </div>
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Técnico
             </Button>
@@ -55,10 +122,46 @@ export default function ListaTecnicos() {
               <DialogDescription>Preencha os dados do novo técnico</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <Input placeholder="Nome completo" />
-              <Input placeholder="Email" type="email" />
-              <Input placeholder="Telefone" />
-              <Button className="w-full">Adicionar</Button>
+              <Input
+                placeholder="Nome completo"
+                value={novoTecnico.nome}
+                onChange={(e) => setNovoTecnico((s) => ({ ...s, nome: e.target.value }))}
+              />
+              <Input
+                placeholder="Telefone"
+                value={novoTecnico.telefone}
+                onChange={(e) => setNovoTecnico((s) => ({ ...s, telefone: e.target.value }))}
+              />
+
+              <div className="space-y-2">
+                <span className="font-medium">Especialidades</span>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ex: manutenção"
+                    value={novoTecnico.especialidadeInput}
+                    onChange={(e) => setNovoTecnico((s) => ({ ...s, especialidadeInput: e.target.value }))}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddEspecialidade()}
+                  />
+                  <Button type="button" variant="secondary" onClick={handleAddEspecialidade}>
+                    Adicionar
+                  </Button>
+                </div>
+                <div className="flex gap-1 flex-wrap">
+                  {novoTecnico.especialidades.map((esp, idx) => (
+                    <Badge key={idx} variant="secondary" className="cursor-pointer" onClick={() => handleRemoveEspecialidade(idx)}>
+                      {esp} ×
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={handleAddTecnico}
+                disabled={saving || !novoTecnico.nome.trim() || !novoTecnico.telefone.trim()}
+              >
+                {saving ? "Salvando..." : "Adicionar"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -83,10 +186,8 @@ export default function ListaTecnicos() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Especialidades</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -94,12 +195,6 @@ export default function ListaTecnicos() {
                 {tecnicosFiltrados.map((tecnico) => (
                   <TableRow key={tecnico.id}>
                     <TableCell className="font-medium">{tecnico.nome}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {tecnico.email}
-                      </div>
-                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-muted-foreground" />
@@ -114,11 +209,6 @@ export default function ListaTecnicos() {
                           </Badge>
                         ))}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(tecnico.statusDisponibilidade)}>
-                        {tecnico.statusDisponibilidade}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
