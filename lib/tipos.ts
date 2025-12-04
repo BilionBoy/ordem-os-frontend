@@ -45,7 +45,9 @@ export interface Equipamento {
   id: string
   marca: string
   modelo: string
-  numeroSerie: string
+  localInstalacao: string
+  capacidade: string
+  observacao: string
   clienteId: string
 }
 
