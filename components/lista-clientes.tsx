@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,16 +13,134 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import type { Cliente } from "@/lib/tipos"
-import { clientesMock } from "@/lib/dados-mockados"
-import { Plus, Edit, Trash2, Phone, Mail, MapPin } from "lucide-react"
+import type { Cliente, Telefone, Endereco } from "@/lib/tipos"
+import { getClientes } from "@/lib/api/clientes"
+import { createCliente } from "@/lib/api/clientes"
+import { Plus, Edit, Trash2, Phone, Mail, MapPin, PlusCircle } from "lucide-react"
+import { CadastrarEquipamento } from "@/components/cadastrar-equipamento"
 
 export default function ListaClientes() {
-  const [clientes, setClientes] = useState<Cliente[]>(clientesMock)
+  // Estado para modal de equipamento
+  const [openEquipModal, setOpenEquipModal] = useState(false)
+  // Estado para equipamentos cadastrados em memória
+  const [equipamentos, setEquipamentos] = useState<any[]>([])
+  const [clientes, setClientes] = useState<Cliente[]>([])
   const [busca, setBusca] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // estado do novo cliente
+  const [novoCliente, setNovoCliente] = useState<{
+    nome: string
+    email?: string
+    telefones: { numero: string }[]
+    enderecos: { rua: string; numero: string; bairro: string; complemento?: string; cidade: string }[]
+  }>({
+    nome: "",
+    email: "",
+    telefones: [{ numero: "" }],
+    enderecos: [{ rua: "", numero: "", bairro: "", complemento: "", cidade: "" }],
+  })
+
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // helpers para telefone/endereço
+  const addTelefone = () =>
+    setNovoCliente((s) => ({ ...s, telefones: [...s.telefones, { numero: "" }] }))
+  const removeTelefone = (idx: number) =>
+    setNovoCliente((s) => ({ ...s, telefones: s.telefones.filter((_, i) => i !== idx) }))
+  const updateTelefone = (idx: number, numero: string) =>
+    setNovoCliente((s) => {
+      const arr = [...s.telefones]
+      arr[idx] = { numero }
+      return { ...s, telefones: arr }
+    })
+
+  const addEndereco = () =>
+    setNovoCliente((s) => ({
+      ...s,
+      enderecos: [...s.enderecos, { rua: "", numero: "", bairro: "", complemento: "", cidade: "" }],
+    }))
+  const removeEndereco = (idx: number) =>
+    setNovoCliente((s) => ({ ...s, enderecos: s.enderecos.filter((_, i) => i !== idx) }))
+  const updateEndereco = (
+    idx: number,
+    field: "rua" | "numero" | "bairro" | "complemento" | "cidade",
+    value: string,
+  ) =>
+    setNovoCliente((s) => {
+      const arr = [...s.enderecos]
+      arr[idx] = { ...arr[idx], [field]: value }
+      return { ...s, enderecos: arr }
+    })
+
+  const resetNovoCliente = () => {
+    setNovoCliente({
+      nome: "",
+      email: "",
+      telefones: [{ numero: "" }],
+      enderecos: [{ rua: "", numero: "", bairro: "", complemento: "", cidade: "" }],
+    })
+  }
+
+  // Função para resetar cliente e equipamentos juntos
+  const resetNovoClienteEEquipamentos = () => {
+    resetNovoCliente()
+    setEquipamentos([])
+  }
+
+  const handleAddCliente = async () => {
+    try {
+      setSaving(true)
+      const criado = await createCliente({
+        nome: novoCliente.nome.trim(),
+        email: novoCliente.email?.trim() || null,
+        telefones_attributes: novoCliente.telefones.filter(t => t.numero.trim()).map(t => ({ numero: t.numero.trim() })),
+        enderecos_attributes: novoCliente.enderecos
+          .filter(e => e.rua.trim())
+          .map(e => ({
+            rua: e.rua.trim(),
+            numero: e.numero.trim(),
+            bairro: e.bairro.trim(),
+            complemento: e.complemento?.trim(),
+            cidade: e.cidade.trim(),
+          })),
+        equipamentos_attributes: equipamentos, // Envia equipamentos junto
+      })
+      setClientes(prev => [criado, ...prev])
+      resetNovoClienteEEquipamentos()
+      setOpen(false)
+    } catch (e) {
+      console.error(e)
+      setError("Erro ao criar cliente")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    async function fetchClientes() {
+      try {
+        setLoading(true)
+        const data = await getClientes()
+        setClientes(data)
+      } catch (err) {
+        setError("Erro ao carregar clientes")
+        console.error(err)
+      } finally {
+      // ...existing code...
+        setLoading(false)
+      }
+    }
+    fetchClientes()
+  }, [])
+
+  if (loading) return <div className="p-6">Carregando...</div>
+  if (error) return <div className="p-6 text-destructive">{error}</div>
 
   const clientesFiltrados = clientes.filter(
-    (c) => c.nome.toLowerCase().includes(busca.toLowerCase()) || c.email.toLowerCase().includes(busca.toLowerCase()),
+    (c) => c.nome.toLowerCase().includes(busca.toLowerCase()) || (c.email?.toLowerCase() || "").includes(busca.toLowerCase()),
   )
 
   return (
@@ -32,24 +150,146 @@ export default function ListaClientes() {
           <h1 className="text-3xl font-bold mb-2">Clientes</h1>
           <p className="text-muted-foreground">Gerencie os clientes cadastrados</p>
         </div>
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Cliente
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-3xl">
+
             <DialogHeader>
               <DialogTitle>Adicionar Novo Cliente</DialogTitle>
               <DialogDescription>Preencha os dados do novo cliente</DialogDescription>
             </DialogHeader>
+
+            <div className="flex justify-end mb-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpenEquipModal(true)}>
+                <PlusCircle className="h-4 w-4 mr-1" /> Cadastrar Equipamento
+              </Button>
+            </div>
+          {/* Modal de cadastro de equipamento */}
+          <CadastrarEquipamento
+            open={openEquipModal}
+            setOpen={setOpenEquipModal}
+            onSalvarEquipamento={(equip) => setEquipamentos((prev) => [...prev, equip])}
+          />
+          {/* Lista de equipamentos cadastrados em memória */}
+          {equipamentos.length > 0 && (
+            <div className="mb-4">
+              <div className="font-medium mb-1">Equipamentos cadastrados:</div>
+              <ul className="list-disc pl-5">
+                {equipamentos.map((eq, i) => (
+                  <li key={i} className="text-sm">
+                    {eq.marca} - {eq.btus} BTUs - {eq.local_instalacao} {eq.observacao && `- ${eq.observacao}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
             <div className="space-y-4">
-              <Input placeholder="Nome da empresa" />
-              <Input placeholder="Email" type="email" />
-              <Input placeholder="Telefone" />
-              <Input placeholder="Endereço" />
-              <Button className="w-full">Adicionar</Button>
+              <Input
+                placeholder="Nome do cliente"
+                value={novoCliente.nome}
+                onChange={(e) => setNovoCliente((s) => ({ ...s, nome: e.target.value }))}
+              />
+              <Input
+                placeholder="E-mail (opcional)"
+                value={novoCliente.email ?? ""}
+                onChange={(e) => setNovoCliente((s) => ({ ...s, email: e.target.value }))}
+              />
+
+              {/* Telefones */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Telefones</span>
+                  <Button type="button" variant="secondary" size="sm" onClick={addTelefone}>
+                    + Telefone
+                  </Button>
+                </div>
+                {novoCliente.telefones.map((t, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Input
+                      placeholder="Número (ex: 11999999999)"
+                      value={t.numero}
+                      onChange={(e) => updateTelefone(idx, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="shrink-0"
+                      onClick={() => removeTelefone(idx)}
+                      disabled={novoCliente.telefones.length === 1}
+                    >
+                      Remover
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Endereços */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Endereços</span>
+                  <Button type="button" variant="secondary" size="sm" onClick={addEndereco}>
+                    + Endereço
+                  </Button>
+                </div>
+                {novoCliente.enderecos.map((e, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Rua"
+                        value={e.rua}
+                        onChange={(ev) => updateEndereco(idx, "rua", ev.target.value)}
+                      />
+                      <Input
+                        placeholder="Número"
+                        value={e.numero}
+                        onChange={(ev) => updateEndereco(idx, "numero", ev.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Bairro"
+                        value={e.bairro}
+                        onChange={(ev) => updateEndereco(idx, "bairro", ev.target.value)}
+                      />
+                        <Input
+                          placeholder="Cidade"
+                          value={e.cidade}
+                          onChange={(ev) => updateEndereco(idx, "cidade", ev.target.value)}
+                        />
+                      <Input
+                        placeholder="Complemento"
+                        value={e.complemento ?? ""}
+                        onChange={(ev) => updateEndereco(idx, "complemento", ev.target.value)}
+                      />
+                    <div>
+                    </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => removeEndereco(idx)}
+                        disabled={novoCliente.enderecos.length === 1}
+                      >
+                        Remover endereço
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                className="w-full"
+                type="button"
+                onClick={handleAddCliente}
+                disabled={saving || !novoCliente.nome.trim()}
+              >
+                {saving ? "Salvando..." : "Adicionar"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -60,7 +300,7 @@ export default function ListaClientes() {
           <CardTitle>Filtrar</CardTitle>
         </CardHeader>
         <CardContent>
-          <Input placeholder="Buscar por nome ou email..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <Input placeholder="Buscar por nome ou telefone..." value={busca} onChange={(e) => setBusca(e.target.value)} />
         </CardContent>
       </Card>
 
@@ -74,7 +314,6 @@ export default function ListaClientes() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Endereço</TableHead>
                   <TableHead>Data Registro</TableHead>
@@ -87,20 +326,12 @@ export default function ListaClientes() {
                     <TableCell className="font-medium">{cliente.nome}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {cliente.email}
+                        {cliente.telefones.map(t => t.numero).join(", ")}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        {cliente.telefone}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm max-w-xs truncate">{cliente.endereco}</span>
+                        <span className="text-sm max-w-xs truncate">{cliente.enderecos.map(e => `${e.rua}, ${e.numero} - ${e.bairro}${e.complemento ? `, ${e.complemento}` : ""} - ${e.cidade}`).join(" | ")}</span>
                       </div>
                     </TableCell>
                     <TableCell>{new Date(cliente.dataRegistro).toLocaleDateString("pt-BR")}</TableCell>

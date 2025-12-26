@@ -4,13 +4,33 @@ export type StatusOrdem = "pendente" | "em_progresso" | "concluido" | "cancelado
 export type StatusTaref = "nao_iniciada" | "em_andamento" | "concluida" | "bloqueada"
 export type TipoServico = "manutencao" | "reparo" | "instalacao" | "diagnostico"
 
+export type Telefone = {
+  id: number
+  numero: string
+  cliente_id: number
+  created_at: string
+  updated_at: string
+}
+
+export type Endereco = {
+  id: number
+  rua: string
+  numero: string
+  bairro: string
+  complemento?: string
+  cidade: string
+  cliente_id: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Cliente {
-  id: string
+  id: number
   nome: string
-  email: string
-  telefone: string
-  endereco: string
+  email?: string | null
   dataRegistro: string
+  telefones: Telefone[]
+  enderecos: Endereco[]
 }
 
 export interface Tecnico {
@@ -25,9 +45,10 @@ export interface Tecnico {
 export interface Equipamento {
   id: string
   marca: string
-  modelo: string
-  numeroSerie: string
-  clienteId: string
+  btus: string
+  local_instalacao: string
+  observacao: string
+  cliente_id: string
 }
 
 export interface Tarefa {
@@ -39,23 +60,31 @@ export interface Tarefa {
   dataFim?: string
 }
 
-export interface OrdemServico {
+export interface Servico {
   id: string
-  numeroOrdem: string
-  clienteId: string
-  tecnicoId?: string
-  equipamentoId?: string
-  tipoServico: TipoServico
+  nome: string
+  valor: number
+}
+
+export interface OrdemServico {
+  id: number
+  status_id: number
+  data_agendamento: string | null
+  data_fechamento: string | null
+  observacao: string | null
+  prioridade_id: number
+  valor_total: string
+  numero_ordem: string
   descricao: string
-  status: StatusOrdem
-  prioridade: "baixa" | "media" | "alta" | "critica"
-  tarefas: Tarefa[]
-  dataAbertura: string
-  dataFechamento?: string
-  dataVencimento?: string
-  notas: string
-  custoEstimado?: number
-  custoReal?: number
+  tipo_servico: string
+  data_vencimento: string | null
+  custo_estimado: string
+  cliente_id: number
+  created_at: string
+  updated_at: string
+  cliente_nome: string
+  prioridade_descricao: string
+  status_descricao: string
 }
 
 export interface Dashboard {
@@ -66,4 +95,9 @@ export interface Dashboard {
   taxaConclusao: number
   custoDia: number
   tempoMedioAtencimento: number
+}
+
+export interface Status {
+  id: string
+  nome: string
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Kanban, List, Users, Settings, X } from "lucide-react"
+import { Home, Kanban, List, Users, Settings, X, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -20,6 +20,7 @@ export function BarraLateral({ estaAberta, aoFechar }: BarraLateralProps) {
     { href: "/ordens", label: "Ordens de Serviço", icon: List },
     { href: "/tecnicos", label: "Técnicos", icon: Users },
     { href: "/clientes", label: "Clientes", icon: Users },
+    { href: "/servicos", label: "Serviços", icon: Wrench },
     { href: "/configuracoes", label: "Configurações", icon: Settings },
   ]
 
