@@ -247,16 +247,18 @@ export default function ListaOrdens() {
       setSaving(true)
       // Monta o payload para a API
       const payload = {
-        cliente_id: novaOrdem.clienteId,
-        tecnico_ids: novaOrdem.tecnicoIds,
-        equipamento_id: novaOrdem.equipamentoId || undefined,
-        servico_ids: novaOrdem.servicoIds,
-        descricao: novaOrdem.descricao,
-        status_id: novaOrdem.status, // agora envia o id
-        prioridade_id: novaOrdem.prioridade, // agora envia o id
-        data_agendamento: novaOrdem.dataAgendamento || undefined,
-        custo_estimado: novaOrdem.custoEstimado ? parseFloat(novaOrdem.custoEstimado) : undefined,
-        notas: novaOrdem.notas,
+          ordem_servico: {
+            cliente_id: novaOrdem.clienteId,
+            tecnico_ids: novaOrdem.tecnicoIds.map((id) => parseInt(id, 10)),
+            equipamento_ids: novaOrdem.equipamentoId ? [parseInt(novaOrdem.equipamentoId, 10)] : [],
+            servico_ids: novaOrdem.servicoIds.map((id) => parseInt(id, 10)),
+            descricao: novaOrdem.descricao,
+            status_id: novaOrdem.status, // agora envia o id
+            prioridade_id: novaOrdem.prioridade, // agora envia o id
+            data_agendamento: novaOrdem.dataAgendamento || undefined,
+            custo_estimado: novaOrdem.custoEstimado ? parseFloat(novaOrdem.custoEstimado) : undefined,
+            notas: novaOrdem.notas,
+          }
       }
       const criada = await createOrdemServico(payload)
       setOrdens((prev) => [criada, ...prev])
@@ -990,13 +992,13 @@ export default function ListaOrdens() {
                       <TableCell className="font-mono font-bold text-primary">{ordem.id}</TableCell>
                       <TableCell className="max-w-xs truncate">{ordem.descricao}</TableCell>
                       <TableCell>
-                        <Badge className={getBadgeStatus(ordem.status_id)}>{ordem.status_id}</Badge>
+                        <Badge className={getBadgeStatus(ordem.status_descricao)}>{ordem.status_descricao}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getBadgePrioridade(ordem.prioridade_id)}>{ordem.prioridade_id}</Badge>
+                        <Badge className={getBadgePrioridade(ordem.prioridade_descricao)}>{ordem.prioridade_descricao}</Badge>
                       </TableCell>
                       <TableCell>{
-                        clientes.find((c) => String(c.id) === String(ordem.clienteId))?.nome || ordem.clienteId
+                        clientes.find((c) => String(c.id) === String(ordem.clienteId))?.nome || ordem.cliente_nome
                       }</TableCell>
                       <TableCell>
                         {ordem.data_agendamento ? new Date(ordem.data_agendamento).toLocaleDateString("pt-BR") : "-"}

@@ -67,22 +67,24 @@ export interface Servico {
 }
 
 export interface OrdemServico {
-  id: string
-  numeroOrdem: string
-  clienteId: string
-  tecnicoId?: string
-  equipamentoId?: string
-  tipoServico: TipoServico
+  id: number
+  status_id: number
+  data_agendamento: string | null
+  data_fechamento: string | null
+  observacao: string | null
+  prioridade_id: number
+  valor_total: string
+  numero_ordem: string
   descricao: string
-  status: StatusOrdem
-  prioridade: "baixa" | "media" | "alta" | "critica"
-  tarefas: Tarefa[]
-  dataAbertura: string
-  dataAgendamento?: string
-  dataFechamento?: string
-  notas?: string
-  custoEstimado?: number
-  custoReal?: number
+  tipo_servico: string
+  data_vencimento: string | null
+  custo_estimado: string
+  cliente_id: number
+  created_at: string
+  updated_at: string
+  cliente_nome: string
+  prioridade_descricao: string
+  status_descricao: string
 }
 
 export interface Dashboard {

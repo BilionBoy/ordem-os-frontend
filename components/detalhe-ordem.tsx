@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Edit, Trash2, Plus, Clock, CheckCircle } from "lucide-react"
 import type { Tarefa } from "@/lib/tipos"
-import { ordensServico, tenicosMock, clientesMock } from "@/lib/dados-mockados"
+import { tenicosMock, clientesMock } from "@/lib/dados-mockados"
+import { getOrdemServicoById } from "@/lib/api/ordem_servicos"
 
 interface DetalheOrdemProps {
   ordemId: string
@@ -26,14 +27,32 @@ interface DetalheOrdemProps {
 
 export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
   const router = useRouter()
-  const ordem = ordensServico.find((o) => o.id === ordemId) || ordensServico[0]
-  const [tarefas, setTarefas] = useState<Tarefa[]>(ordem.tarefas)
+
+  const [ordem, setOrdem] = useState<any>(null)
+  const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [novaDescricao, setNovaDescricao] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const cliente = clientesMock.find((c) => c.id === ordem.clienteId)
-  const tecnico = tenicosMock.find((t) => t.id === ordem.tecnicoId)
+  useEffect(() => {
+    async function fetchOrdem() {
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await getOrdemServicoById(ordemId)
+        setOrdem(data)
+        setTarefas(data.tarefas || [])
+      } catch (err: any) {
+        setError(err.message || "Erro ao buscar ordem de serviço")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrdem()
+  }, [ordemId])
 
-  const taxaProgress = (tarefas.filter((t) => t.status === "concluida").length / tarefas.length) * 100
+  const tecnico = ordem ? tenicosMock.find((t) => t.id === ordem.tecnicoId) : null
+  const taxaProgress = tarefas.length > 0 ? (tarefas.filter((t) => t.status === "concluida").length / tarefas.length) * 100 : 0
 
   const getBadgeStatus = (status: string) => {
     const cores: { [key: string]: string } = {
@@ -75,6 +94,16 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
     setTarefas(tarefas.filter((t) => t.id !== tarefaId))
   }
 
+  if (loading) {
+    return <div className="p-6">Carregando...</div>
+  }
+  if (error) {
+    return <div className="p-6 text-red-500">{error}</div>
+  }
+  if (!ordem) {
+    return <div className="p-6">Ordem de serviço não encontrada.</div>
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       {/* Cabeçalho */}
@@ -83,8 +112,7 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">{ordem.numeroOrdem}</h1>
-          <p className="text-muted-foreground">{ordem.descricao}</p>
+          <h1 className="text-3xl font-bold">OS Número: {ordem.id}</h1>
         </div>
         <Button variant="outline" size="sm">
           <Edit className="h-4 w-4 mr-2" />
@@ -106,13 +134,13 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
                 <div>
                   <label className="text-sm text-muted-foreground">Status</label>
                   <div className="mt-1">
-                    <Badge className={getBadgeStatus(ordem.status)}>{ordem.status.replace("_", " ")}</Badge>
+                    <Badge className={getBadgeStatus(ordem.status_descricao)}>{ordem.status_descricao}</Badge>
                   </div>
                 </div>
                 <div>
                   <label className="text-sm text-muted-foreground">Prioridade</label>
                   <div className="mt-1">
-                    <Badge className={getBadgePrioridade(ordem.prioridade)}>{ordem.prioridade}</Badge>
+                    <Badge className={getBadgePrioridade(ordem.prioridade_descricao)}>{ordem.prioridade_descricao}</Badge>
                   </div>
                 </div>
                 <div>
@@ -120,18 +148,18 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
                   <p className="font-medium mt-1">{ordem.tipoServico}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-muted-foreground">Data de Abertura</label>
-                  <p className="font-medium mt-1">{new Date(ordem.dataAbertura).toLocaleDateString("pt-BR")}</p>
+                  <label className="text-sm text-muted-foreground">Data de Agendamento</label>
+                  <p className="font-medium mt-1">{new Date(ordem.data_agendamento).toLocaleDateString("pt-BR")}</p>
                 </div>
               </div>
 
               {/* Datas importantes */}
               <div className="border-t pt-4 space-y-2">
-                {ordem.dataVencimento && (
+                {ordem.data_vencimento && (
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-orange-500" />
                     <span className="text-sm">
-                      Vencimento: <strong>{new Date(ordem.dataVencimento).toLocaleDateString("pt-BR")}</strong>
+                      Vencimento: <strong>{new Date(ordem.data_vencimento).toLocaleDateString("pt-BR")}</strong>
                     </span>
                   </div>
                 )}
@@ -171,68 +199,45 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
             </CardContent>
           </Card>
 
-          {/* Tarefas */}
+          {/* Serviços */}
           <Card>
             <CardHeader>
-              <CardTitle>Tarefas e Atividades</CardTitle>
-              <CardDescription>Progresso: {Math.round(taxaProgress)}%</CardDescription>
-              <Progress value={taxaProgress} className="mt-2" />
+              <CardTitle>Serviços</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {tarefas.map((tarefa) => (
-                <div key={tarefa.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <p className="font-medium">{tarefa.descricao}</p>
-                      {tarefa.tecnicoAssignado && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Atribuído a: {tenicosMock.find((t) => t.id === tarefa.tecnicoAssignado)?.nome || "-"}
-                        </p>
-                      )}
-                      {tarefa.dataInicio && (
-                        <p className="text-sm text-muted-foreground">
-                          Iniciado em: {new Date(tarefa.dataInicio).toLocaleDateString("pt-BR")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={getBadgeStatus(tarefa.status)}>{tarefa.status.replace("_", " ")}</Badge>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogTitle>Remover tarefa?</AlertDialogTitle>
-                          <AlertDialogDescription>Essa ação não pode ser desfeita.</AlertDialogDescription>
-                          <div className="flex gap-4 justify-end">
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => removerTarefa(tarefa.id)}>Remover</AlertDialogAction>
-                          </div>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {ordem.servicos && ordem.servicos.length > 0 ? (
+                <ul className="space-y-2">
+                  {ordem.servicos.map((servico: any) => (
+                    <li key={servico.id} className="flex justify-between items-center border-b pb-2 last:border-b-0 last:pb-0">
+                      <span className="font-medium">{servico.nome}</span>
+                      <span className="text-sm text-muted-foreground">R$ {Number(servico.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum serviço relacionado.</p>
+              )}
+            </CardContent>
+          </Card>
 
-              {/* Adicionar nova tarefa */}
-              <div className="border-t pt-4 space-y-2">
-                <label className="text-sm font-medium">Nova Tarefa</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Descreva a nova tarefa..."
-                    value={novaDescricao}
-                    onChange={(e) => setNovaDescricao(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && adicionarTarefa()}
-                  />
-                  <Button onClick={adicionarTarefa} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar
-                  </Button>
-                </div>
-              </div>
+          {/* Equipamentos */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Equipamentos</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {ordem.equipamentos && ordem.equipamentos.length > 0 ? (
+                <ul className="space-y-2">
+                  {ordem.equipamentos.map((equip: any) => (
+                    <li key={equip.id} className="border-b pb-2 last:border-b-0 last:pb-0">
+                      <div className="font-medium">{equip.marca} ({equip.btus} BTUs)</div>
+                      <div className="text-sm text-muted-foreground">Local: {equip.local_instalacao}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum equipamento relacionado.</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -247,19 +252,20 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
             <CardContent className="space-y-3">
               <div>
                 <p className="text-sm text-muted-foreground">Nome</p>
-                <p className="font-medium">{cliente?.nome || "Não informado"}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="font-medium text-sm break-all">{cliente?.email || "-"}</p>
+                <p className="font-medium">{ordem.cliente?.nome || "Não informado"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Telefone</p>
-                <p className="font-medium">{cliente?.telefone || "-"}</p>
+                <p className="font-medium">{ordem.cliente?.telefones.find(() => true)?.numero || "-"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Endereço</p>
-                <p className="font-medium text-sm">{cliente?.endereco || "-"}</p>
+               <p className="font-medium text-sm">
+                  {ordem.cliente?.enderecos?.[0]
+                    ? `${ordem.cliente.enderecos[0].rua}, ${ordem.cliente.enderecos[0].numero} - ${ordem.cliente.enderecos[0].bairro}`
+                    : "-"}
+                </p>
+
               </div>
               <Button className="w-full mt-4">Contatar Cliente</Button>
             </CardContent>
@@ -271,41 +277,15 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
               <CardTitle className="text-lg">Técnico Responsável</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {tecnico ? (
+              {ordem.tecnico_responsavel ? (
                 <>
                   <div>
                     <p className="text-sm text-muted-foreground">Nome</p>
-                    <p className="font-medium">{tecnico.nome}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium text-sm break-all">{tecnico.email}</p>
+                    <p className="font-medium">{ordem.tecnico_responsavel.nome}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Telefone</p>
-                    <p className="font-medium">{tecnico.telefone}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Especialidades</p>
-                    <div className="space-y-1">
-                      {tecnico.especialidades.map((esp, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {esp}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Status</p>
-                    <Badge
-                      className={
-                        tecnico.statusDisponibilidade === "disponivel"
-                          ? "bg-green-500 text-white"
-                          : "bg-gray-500 text-white"
-                      }
-                    >
-                      {tecnico.statusDisponibilidade}
-                    </Badge>
+                    <p className="font-medium">{ordem.tecnico_responsavel.telefone}</p>
                   </div>
                 </>
               ) : (
@@ -326,7 +306,7 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
                   <div>
                     <p className="text-sm font-medium">Ordem aberta</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(ordem.dataAbertura).toLocaleDateString("pt-BR")}
+                      {new Date(ordem.created_at).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                 </div>
