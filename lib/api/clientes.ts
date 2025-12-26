@@ -6,7 +6,7 @@ export type NovoClientePayload = {
   nome: string
   email?: string | null
   telefones_attributes: { numero: string }[]
-  enderecos_attributes: { logradouro: string; cidade?: string; estado?: string; cep?: string }[]
+  enderecos_attributes: { rua: string; numero: string; bairro: string; complemento?: string; cidade: string }[]
 }
 
 export async function getClientes(): Promise<Cliente[]> {

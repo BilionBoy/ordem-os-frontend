@@ -33,7 +33,8 @@ import {
 import { getClientes } from "@/lib/api/clientes"
 import { getTecnicos } from "@/lib/api/tecnicos"
 import { getEquipamentosByCliente, createEquipamento } from "@/lib/api/equipamentos"
-import type { OrdemServico, Cliente, Tecnico, Equipamento } from "@/lib/tipos"
+import { getServicos } from "@/lib/api/servicos"
+import type { OrdemServico, Cliente, Tecnico, Equipamento, Servico } from "@/lib/tipos"
 import { ordensServico } from "@/lib/dados-mockados"
 import { Search, Eye, Plus, Check, ChevronsUpDown, ExternalLink } from "lucide-react"
 import { NaoEncontrado } from "./nao-encontrado"
@@ -62,6 +63,11 @@ export default function ListaOrdens() {
   const [loadingEquipamentos, setLoadingEquipamentos] = useState(false)
   const [openEquipamentoCombo, setOpenEquipamentoCombo] = useState(false)
 
+  // Estado para serviços
+  const [servicos, setServicos] = useState<Servico[]>([])
+  const [loadingServicos, setLoadingServicos] = useState(false)
+  const [openServicoCombo, setOpenServicoCombo] = useState(false)
+
   // Modal de Equipamento
   const [openEquipModal, setOpenEquipModal] = useState(false)
   const [savingEquip, setSavingEquip] = useState(false)
@@ -76,23 +82,22 @@ export default function ListaOrdens() {
 
   const [novaOrdem, setNovaOrdem] = useState({
     clienteId: "",
-    tecnicoIds: [] as string[], // ← multiselect
+    tecnicoIds: [] as string[],
     equipamentoId: "",
-    tipoServico: "manutencao" as const,
+    servicoIds: [] as string[],
     descricao: "",
     prioridade: "media" as const,
-    dataVencimento: "",
+    dataAgendamento: "",
     custoEstimado: "",
     notas: "",
   })
 
-  // Carregar clientes ao abrir o dialog
+  // Carregar dados ao abrir o dialog
   useEffect(() => {
-    if (open && clientes.length === 0) {
-      fetchClientes()
-    }
-    if (open && tecnicos.length === 0) {
-      fetchTecnicos()
+    if (open) {
+      if (clientes.length === 0) fetchClientes()
+      if (tecnicos.length === 0) fetchTecnicos()
+      if (servicos.length === 0) fetchServicos()
     }
   }, [open])
 
@@ -149,15 +154,27 @@ export default function ListaOrdens() {
     }
   }
 
+  const fetchServicos = async () => {
+    try {
+      setLoadingServicos(true)
+      const data = await getServicos()
+      setServicos(data)
+    } catch (err) {
+      console.error("Erro ao carregar serviços:", err)
+    } finally {
+      setLoadingServicos(false)
+    }
+  }
+
   const resetNovaOrdem = () =>
     setNovaOrdem({
       clienteId: "",
       tecnicoIds: [],
       equipamentoId: "",
-      tipoServico: "manutencao",
+      servicoIds: [],
       descricao: "",
       prioridade: "media",
-      dataVencimento: "",
+      dataAgendamento: "",
       custoEstimado: "",
       notas: "",
     })
@@ -175,20 +192,18 @@ export default function ListaOrdens() {
   const handleAddOrdem = async () => {
     try {
       setSaving(true)
-      // TODO: chamar API createOrdem
       const novaOrdemCriada: OrdemServico = {
         id: `OS-${Date.now()}`,
         numeroOrdem: `OS-${String(ordens.length + 1).padStart(4, "0")}`,
         clienteId: novaOrdem.clienteId,
         tecnicoId: novaOrdem.tecnicoIds[0] || undefined,
         equipamentoId: novaOrdem.equipamentoId || undefined,
-        tipoServico: novaOrdem.tipoServico,
         descricao: novaOrdem.descricao,
         status: "pendente",
         prioridade: novaOrdem.prioridade,
         tarefas: [],
         dataAbertura: new Date().toISOString(),
-        dataVencimento: novaOrdem.dataVencimento || undefined,
+        dataAgendamento: novaOrdem.dataAgendamento || undefined,
         notas: novaOrdem.notas,
         custoEstimado: novaOrdem.custoEstimado ? parseFloat(novaOrdem.custoEstimado) : undefined,
       }
@@ -217,9 +232,10 @@ export default function ListaOrdens() {
       await fetchEquipamentos(parseInt(novoEquipamento.clienteId, 10))
       setNovaOrdem((s) => ({ ...s, equipamentoId: String(criado.id) }))
       resetNovoEquipamento()
-      setOpenEquipModal(false)
+      setOpenEquipModal(false) // ← Fecha a modal
     } catch (e) {
       console.error(e)
+      // Opcional: exibir erro ao usuário
     } finally {
       setSavingEquip(false)
     }
@@ -259,6 +275,21 @@ export default function ListaOrdens() {
   const clienteSelecionado = clientes.find((c) => String(c.id) === novaOrdem.clienteId)
   const tecnicosSelecionados = tecnicos.filter((t) => novaOrdem.tecnicoIds.includes(String(t.id)))
   const equipamentoSelecionado = equipamentos.find((e) => String(e.id) === novaOrdem.equipamentoId)
+  const servicosSelecionados = useMemo(
+    () => servicos.filter((s) => novaOrdem.servicoIds.includes(String(s.id))),
+    [servicos, novaOrdem.servicoIds]
+  )
+
+  // Calcular custo estimado automaticamente ao selecionar serviços
+  useEffect(() => {
+    if (novaOrdem.servicoIds.length > 0) {
+      const servicosFiltrados = servicos.filter((s) => novaOrdem.servicoIds.includes(String(s.id)))
+      const total = servicosFiltrados.reduce((acc, servico) => acc + Number(servico.valor || 0), 0)
+      setNovaOrdem((s) => ({ ...s, custoEstimado: total.toFixed(2) }))
+    } else {
+      setNovaOrdem((s) => ({ ...s, custoEstimado: "" }))
+    }
+  }, [novaOrdem.servicoIds, servicos])
 
   return (
     <div className="p-6 space-y-6">
@@ -274,7 +305,7 @@ export default function ListaOrdens() {
               Nova Ordem
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-3xl sm:max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Nova Ordem de Serviço</DialogTitle>
               <DialogDescription>Preencha os dados da nova ordem</DialogDescription>
@@ -305,7 +336,7 @@ export default function ListaOrdens() {
                         className="w-full justify-between"
                       >
                         {clienteSelecionado
-                          ? `${clienteSelecionado.nome} ${clienteSelecionado.email ? `(${clienteSelecionado.email})` : ""}`
+                          ? `${clienteSelecionado.nome} ${clienteSelecionado.telefones?.[0] ? `(${clienteSelecionado.telefones[0].numero})` : ""}`
                           : "Selecione um cliente..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -344,90 +375,6 @@ export default function ListaOrdens() {
                                 </div>
                               </CommandItem>
                             ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Combobox de Técnicos (multiselect) */}
-                <div className="space-y-2 md:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">Técnicos</label>
-                    <Link
-                      href="/tecnicos"
-                      target="_blank"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                      <Plus className="h-3 w-3" />
-                      Cadastrar novo técnico
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  </div>
-                  <Popover open={openTecnicoCombo} onOpenChange={setOpenTecnicoCombo}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={openTecnicoCombo}
-                        className="w-full justify-between"
-                      >
-                        {tecnicosSelecionados.length > 0
-                          ? tecnicosSelecionados.map((t) => t.nome).slice(0, 2).join(", ") +
-                            (tecnicosSelecionados.length > 2 ? ` +${tecnicosSelecionados.length - 2}` : "")
-                          : "Selecione técnicos (opcional)..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0">
-                      <Command>
-                        <CommandInput placeholder="Buscar técnico..." />
-                        <CommandList>
-                          <CommandEmpty>
-                            {loadingTecnicos ? "Carregando..." : "Nenhum técnico encontrado."}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {/* Limpar seleção */}
-                            <CommandItem
-                              value="limpar"
-                              onSelect={() => {
-                                setNovaOrdem((s) => ({ ...s, tecnicoIds: [] }))
-                                setOpenTecnicoCombo(false)
-                              }}
-                            >
-                              <span className="text-muted-foreground italic">Limpar seleção</span>
-                            </CommandItem>
-
-                            {tecnicos.map((tecnico) => {
-                              const idStr = String(tecnico.id)
-                              const selecionado = novaOrdem.tecnicoIds.includes(idStr)
-                              return (
-                                <CommandItem
-                                  key={tecnico.id}
-                                  value={`${tecnico.nome} ${tecnico.telefone}`}
-                                  onSelect={() => {
-                                    setNovaOrdem((s) => ({
-                                      ...s,
-                                      tecnicoIds: selecionado
-                                        ? s.tecnicoIds.filter((id) => id !== idStr)
-                                        : [...s.tecnicoIds, idStr],
-                                    }))
-                                  }}
-                                >
-                                  <Check className={`mr-2 h-4 w-4 ${selecionado ? "opacity-100" : "opacity-0"}`} />
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">{tecnico.nome}</span>
-                                    <span className="text-xs text-muted-foreground">{tecnico.telefone}</span>
-                                    {tecnico.especialidades?.length > 0 && (
-                                      <span className="text-xs text-muted-foreground">
-                                        {tecnico.especialidades.slice(0, 3).join(", ")}
-                                      </span>
-                                    )}
-                                  </div>
-                                </CommandItem>
-                              )
-                            })}
                           </CommandGroup>
                         </CommandList>
                       </Command>
@@ -523,24 +470,197 @@ export default function ListaOrdens() {
                     </PopoverContent>
                   </Popover>
                 </div>
+                
+                {/* Combobox de Técnicos (multiselect) */}
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Técnicos</label>
+                    <Link
+                      href="/tecnicos"
+                      target="_blank"
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Cadastrar novo técnico
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  <Popover open={openTecnicoCombo} onOpenChange={setOpenTecnicoCombo}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openTecnicoCombo}
+                        className="w-full justify-between"
+                      >
+                        {tecnicosSelecionados.length > 0
+                          ? tecnicosSelecionados.map((t) => t.nome).slice(0, 2).join(", ") +
+                            (tecnicosSelecionados.length > 2 ? ` +${tecnicosSelecionados.length - 2}` : "")
+                          : "Selecione técnicos (opcional)..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Buscar técnico..." />
+                        <CommandList>
+                          <CommandEmpty>
+                            {loadingTecnicos ? "Carregando..." : "Nenhum técnico encontrado."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {/* Limpar seleção */}
+                            <CommandItem
+                              value="limpar"
+                              onSelect={() => {
+                                setNovaOrdem((s) => ({ ...s, tecnicoIds: [] }))
+                                setOpenTecnicoCombo(false)
+                              }}
+                            >
+                              <span className="text-muted-foreground italic">Limpar seleção</span>
+                            </CommandItem>
 
-                {/* Tipo de Serviço */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Tipo de Serviço *</label>
-                  <Select
-                    value={novaOrdem.tipoServico}
-                    onValueChange={(v) => setNovaOrdem((s) => ({ ...s, tipoServico: v as any }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manutencao">Manutenção</SelectItem>
-                      <SelectItem value="reparo">Reparo</SelectItem>
-                      <SelectItem value="instalacao">Instalação</SelectItem>
-                      <SelectItem value="diagnostico">Diagnóstico</SelectItem>
-                    </SelectContent>
-                  </Select>
+                            {tecnicos.map((tecnico) => {
+                              const idStr = String(tecnico.id)
+                              const selecionado = novaOrdem.tecnicoIds.includes(idStr)
+                              return (
+                                <CommandItem
+                                  key={tecnico.id}
+                                  value={`${tecnico.nome} ${tecnico.telefone}`}
+                                  onSelect={() => {
+                                    setNovaOrdem((s) => ({
+                                      ...s,
+                                      tecnicoIds: selecionado
+                                        ? s.tecnicoIds.filter((id) => id !== idStr)
+                                        : [...s.tecnicoIds, idStr],
+                                    }))
+                                  }}
+                                >
+                                  <Check className={`mr-2 h-4 w-4 ${selecionado ? "opacity-100" : "opacity-0"}`} />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{tecnico.nome}</span>
+                                    <span className="text-xs text-muted-foreground">{tecnico.telefone}</span>
+                                    {tecnico.especialidades?.length > 0 && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {tecnico.especialidades.slice(0, 3).join(", ")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </CommandItem>
+                              )
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Combobox de Serviços (multiselect) */}
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Serviços *</label>
+                    <Link
+                      href="/servicos"
+                      target="_blank"
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Cadastrar novo serviço
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  <Popover open={openServicoCombo} onOpenChange={setOpenServicoCombo}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openServicoCombo}
+                        className="w-full justify-between"
+                      >
+                        {servicosSelecionados.length > 0
+                          ? servicosSelecionados.length === 1
+                            ? servicosSelecionados[0].nome
+                            : `${servicosSelecionados.length} serviços selecionados`
+                          : "Selecione serviços..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Buscar serviço..." />
+                        <CommandList>
+                          <CommandEmpty>
+                            {loadingServicos ? "Carregando..." : "Nenhum serviço encontrado."}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {/* Limpar seleção */}
+                            <CommandItem
+                              value="limpar"
+                              onSelect={() => {
+                                setNovaOrdem((s) => ({ ...s, servicoIds: [] }))
+                                setOpenServicoCombo(false)
+                              }}
+                            >
+                              <span className="text-muted-foreground italic">Limpar seleção</span>
+                            </CommandItem>
+
+                            {servicos.map((servico) => {
+                              const idStr = String(servico.id)
+                              const selecionado = novaOrdem.servicoIds.includes(idStr)
+                              return (
+                                <CommandItem
+                                  key={servico.id}
+                                  value={servico.nome}
+                                  onSelect={() => {
+                                    setNovaOrdem((s) => ({
+                                      ...s,
+                                      servicoIds: selecionado
+                                        ? s.servicoIds.filter((id) => id !== idStr)
+                                        : [...s.servicoIds, idStr],
+                                    }))
+                                  }}
+                                >
+                                  <Check className={`mr-2 h-4 w-4 ${selecionado ? "opacity-100" : "opacity-0"}`} />
+                                  <div className="flex flex-col flex-1">
+                                    <span className="font-medium">{servico.nome}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {servico.valor.toLocaleString("pt-BR", {
+                                        style: "currency",
+                                        currency: "BRL",
+                                      })}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              )
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Exibir serviços selecionados */}
+                  {servicosSelecionados.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {servicosSelecionados.map((servico) => (
+                        <Badge key={servico.id} variant="secondary" className="flex items-center gap-1">
+                          {servico.nome}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNovaOrdem((s) => ({
+                                ...s,
+                                servicoIds: s.servicoIds.filter((id) => id !== String(servico.id)),
+                              }))
+                            }
+                            className="ml-1 hover:text-destructive"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Prioridade */}
@@ -562,19 +682,19 @@ export default function ListaOrdens() {
                   </Select>
                 </div>
 
-                {/* Data de Vencimento */}
+                {/* Data de Agendamento */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Data de Vencimento</label>
+                  <label className="text-sm font-medium">Data de Agendamento</label>
                   <Input
                     type="date"
-                    value={novaOrdem.dataVencimento}
-                    onChange={(e) => setNovaOrdem((s) => ({ ...s, dataVencimento: e.target.value }))}
+                    value={novaOrdem.dataAgendamento}
+                    onChange={(e) => setNovaOrdem((s) => ({ ...s, dataAgendamento: e.target.value }))}
                   />
                 </div>
 
-                {/* Custo Estimado */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Custo Estimado</label>
+                {/* Custo Estimado (calculado automaticamente) */}
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium">Custo Estimado (calculado automaticamente)</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -582,7 +702,14 @@ export default function ListaOrdens() {
                     placeholder="0.00"
                     value={novaOrdem.custoEstimado}
                     onChange={(e) => setNovaOrdem((s) => ({ ...s, custoEstimado: e.target.value }))}
+                    className="bg-muted"
+                    
                   />
+                  {servicosSelecionados.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Soma de {servicosSelecionados.length} serviço(s) selecionado(s)
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -609,7 +736,12 @@ export default function ListaOrdens() {
               <Button
                 className="w-full"
                 onClick={handleAddOrdem}
-                disabled={saving || !novaOrdem.clienteId.trim() || !novaOrdem.descricao.trim()}
+                disabled={
+                  saving ||
+                  !novaOrdem.clienteId.trim() ||
+                  !novaOrdem.descricao.trim() ||
+                  novaOrdem.servicoIds.length === 0
+                }
               >
                 {saving ? "Criando..." : "Criar Ordem"}
               </Button>
@@ -620,7 +752,7 @@ export default function ListaOrdens() {
 
       {/* Modal de cadastro de equipamento */}
       <Dialog open={openEquipModal} onOpenChange={setOpenEquipModal}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Cadastrar Equipamento</DialogTitle>
             <DialogDescription>Preencha os dados do equipamento para o cliente selecionado</DialogDescription>
@@ -777,7 +909,7 @@ export default function ListaOrdens() {
                     <TableHead>Status</TableHead>
                     <TableHead>Prioridade</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Vencimento</TableHead>
+                    <TableHead>Agendamento</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -794,7 +926,7 @@ export default function ListaOrdens() {
                       </TableCell>
                       <TableCell>{ordem.clienteId}</TableCell>
                       <TableCell>
-                        {ordem.dataVencimento ? new Date(ordem.dataVencimento).toLocaleDateString("pt-BR") : "-"}
+                        {ordem.dataAgendamento ? new Date(ordem.dataAgendamento).toLocaleDateString("pt-BR") : "-"}
                       </TableCell>
                       <TableCell>
                         <Link href={`/ordens/${ordem.id}`}>

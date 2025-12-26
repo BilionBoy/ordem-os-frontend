@@ -4,16 +4,15 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/a
 
 export type NovoEquipamentoPayload = {
   marca: string
-  modelo: string
-  numero_serie: string
-  capacidade?: number
+  btus: string
+  local_instalacao: string
   observacao?: string
   cliente_id: number
 }
 
-// Busca equipamentos de um cliente
+// Busca equipamentos de um cliente via query parameter
 export async function getEquipamentosByCliente(clienteId: number): Promise<Equipamento[]> {
-  const res = await fetch(`${API_BASE_URL}/clientes/${clienteId}/equipamentos`, { cache: "no-store" })
+  const res = await fetch(`${API_BASE_URL}/equipamentos?cliente_id=${clienteId}`, { cache: "no-store" })
   if (!res.ok) throw new Error("Erro ao buscar equipamentos do cliente")
   return res.json()
 }

@@ -14,10 +14,11 @@ export type Telefone = {
 
 export type Endereco = {
   id: number
-  logradouro: string
-  cep: string
+  rua: string
+  numero: string
+  bairro: string
+  complemento?: string
   cidade: string
-  estado: string
   cliente_id: number
   created_at: string
   updated_at: string
@@ -44,11 +45,10 @@ export interface Tecnico {
 export interface Equipamento {
   id: string
   marca: string
-  modelo: string
-  localInstalacao: string
-  capacidade: string
+  btus: string
+  local_instalacao: string
   observacao: string
-  clienteId: string
+  cliente_id: string
 }
 
 export interface Tarefa {
@@ -78,9 +78,9 @@ export interface OrdemServico {
   prioridade: "baixa" | "media" | "alta" | "critica"
   tarefas: Tarefa[]
   dataAbertura: string
+  dataAgendamento?: string
   dataFechamento?: string
-  dataVencimento?: string
-  notas: string
+  notas?: string
   custoEstimado?: number
   custoReal?: number
 }
@@ -93,4 +93,9 @@ export interface Dashboard {
   taxaConclusao: number
   custoDia: number
   tempoMedioAtencimento: number
+}
+
+export interface Status {
+  id: string
+  nome: string
 }

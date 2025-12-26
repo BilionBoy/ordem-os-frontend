@@ -16,9 +16,14 @@ import {
 import type { Cliente, Telefone, Endereco } from "@/lib/tipos"
 import { getClientes } from "@/lib/api/clientes"
 import { createCliente } from "@/lib/api/clientes"
-import { Plus, Edit, Trash2, Phone, Mail, MapPin } from "lucide-react"
+import { Plus, Edit, Trash2, Phone, Mail, MapPin, PlusCircle } from "lucide-react"
+import { CadastrarEquipamento } from "@/components/cadastrar-equipamento"
 
 export default function ListaClientes() {
+  // Estado para modal de equipamento
+  const [openEquipModal, setOpenEquipModal] = useState(false)
+  // Estado para equipamentos cadastrados em memória
+  const [equipamentos, setEquipamentos] = useState<any[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [busca, setBusca] = useState("")
   const [loading, setLoading] = useState(true)
@@ -29,12 +34,12 @@ export default function ListaClientes() {
     nome: string
     email?: string
     telefones: { numero: string }[]
-    enderecos: { logradouro: string; cidade?: string; estado?: string; cep?: string }[]
+    enderecos: { rua: string; numero: string; bairro: string; complemento?: string; cidade: string }[]
   }>({
     nome: "",
     email: "",
     telefones: [{ numero: "" }],
-    enderecos: [{ logradouro: "", cidade: "", estado: "", cep: "" }],
+    enderecos: [{ rua: "", numero: "", bairro: "", complemento: "", cidade: "" }],
   })
 
   const [open, setOpen] = useState(false)
@@ -55,13 +60,13 @@ export default function ListaClientes() {
   const addEndereco = () =>
     setNovoCliente((s) => ({
       ...s,
-      enderecos: [...s.enderecos, { logradouro: "", cidade: "", estado: "", cep: "" }],
+      enderecos: [...s.enderecos, { rua: "", numero: "", bairro: "", complemento: "", cidade: "" }],
     }))
   const removeEndereco = (idx: number) =>
     setNovoCliente((s) => ({ ...s, enderecos: s.enderecos.filter((_, i) => i !== idx) }))
   const updateEndereco = (
     idx: number,
-    field: "logradouro" | "cidade" | "estado" | "cep",
+    field: "rua" | "numero" | "bairro" | "complemento" | "cidade",
     value: string,
   ) =>
     setNovoCliente((s) => {
@@ -70,13 +75,20 @@ export default function ListaClientes() {
       return { ...s, enderecos: arr }
     })
 
-  const resetNovoCliente = () =>
+  const resetNovoCliente = () => {
     setNovoCliente({
       nome: "",
       email: "",
       telefones: [{ numero: "" }],
-      enderecos: [{ logradouro: "", cidade: "", estado: "", cep: "" }],
+      enderecos: [{ rua: "", numero: "", bairro: "", complemento: "", cidade: "" }],
     })
+  }
+
+  // Função para resetar cliente e equipamentos juntos
+  const resetNovoClienteEEquipamentos = () => {
+    resetNovoCliente()
+    setEquipamentos([])
+  }
 
   const handleAddCliente = async () => {
     try {
@@ -84,19 +96,20 @@ export default function ListaClientes() {
       const criado = await createCliente({
         nome: novoCliente.nome.trim(),
         email: novoCliente.email?.trim() || null,
-        telefones: novoCliente.telefones.filter(t => t.numero.trim()).map(t => ({ numero: t.numero.trim() })),
-        enderecos: novoCliente.enderecos
-          .filter(e => e.logradouro.trim())
+        telefones_attributes: novoCliente.telefones.filter(t => t.numero.trim()).map(t => ({ numero: t.numero.trim() })),
+        enderecos_attributes: novoCliente.enderecos
+          .filter(e => e.rua.trim())
           .map(e => ({
-            logradouro: e.logradouro.trim(),
-            cidade: e.cidade?.trim(),
-            estado: e.estado?.trim(),
-            cep: e.cep?.trim(),
+            rua: e.rua.trim(),
+            numero: e.numero.trim(),
+            bairro: e.bairro.trim(),
+            complemento: e.complemento?.trim(),
+            cidade: e.cidade.trim(),
           })),
+        equipamentos_attributes: equipamentos, // Envia equipamentos junto
       })
-      // Atualiza lista localmente (ou re-fetch se preferir)
       setClientes(prev => [criado, ...prev])
-      resetNovoCliente()
+      resetNovoClienteEEquipamentos()
       setOpen(false)
     } catch (e) {
       console.error(e)
@@ -116,6 +129,7 @@ export default function ListaClientes() {
         setError("Erro ao carregar clientes")
         console.error(err)
       } finally {
+      // ...existing code...
         setLoading(false)
       }
     }
@@ -126,7 +140,7 @@ export default function ListaClientes() {
   if (error) return <div className="p-6 text-destructive">{error}</div>
 
   const clientesFiltrados = clientes.filter(
-    (c) => c.nome.toLowerCase().includes(busca.toLowerCase()) || c.email.toLowerCase().includes(busca.toLowerCase()),
+    (c) => c.nome.toLowerCase().includes(busca.toLowerCase()) || (c.email?.toLowerCase() || "").includes(busca.toLowerCase()),
   )
 
   return (
@@ -143,11 +157,37 @@ export default function ListaClientes() {
               Novo Cliente
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-3xl">
+
             <DialogHeader>
               <DialogTitle>Adicionar Novo Cliente</DialogTitle>
               <DialogDescription>Preencha os dados do novo cliente</DialogDescription>
             </DialogHeader>
+
+            <div className="flex justify-end mb-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpenEquipModal(true)}>
+                <PlusCircle className="h-4 w-4 mr-1" /> Cadastrar Equipamento
+              </Button>
+            </div>
+          {/* Modal de cadastro de equipamento */}
+          <CadastrarEquipamento
+            open={openEquipModal}
+            setOpen={setOpenEquipModal}
+            onSalvarEquipamento={(equip) => setEquipamentos((prev) => [...prev, equip])}
+          />
+          {/* Lista de equipamentos cadastrados em memória */}
+          {equipamentos.length > 0 && (
+            <div className="mb-4">
+              <div className="font-medium mb-1">Equipamentos cadastrados:</div>
+              <ul className="list-disc pl-5">
+                {equipamentos.map((eq, i) => (
+                  <li key={i} className="text-sm">
+                    {eq.marca} - {eq.btus} BTUs - {eq.local_instalacao} {eq.observacao && `- ${eq.observacao}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
             <div className="space-y-4">
               <Input
@@ -198,28 +238,37 @@ export default function ListaClientes() {
                   </Button>
                 </div>
                 {novoCliente.enderecos.map((e, idx) => (
-                  <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <Input
-                      placeholder="Logradouro"
-                      value={e.logradouro}
-                      onChange={(ev) => updateEndereco(idx, "logradouro", ev.target.value)}
-                    />
-                    <Input
-                      placeholder="Cidade"
-                      value={e.cidade ?? ""}
-                      onChange={(ev) => updateEndereco(idx, "cidade", ev.target.value)}
-                    />
-                    <Input
-                      placeholder="Estado"
-                      value={e.estado ?? ""}
-                      onChange={(ev) => updateEndereco(idx, "estado", ev.target.value)}
-                    />
-                    <Input
-                      placeholder="CEP"
-                      value={e.cep ?? ""}
-                      onChange={(ev) => updateEndereco(idx, "cep", ev.target.value)}
-                    />
-                    <div className="md:col-span-4">
+                  <div key={idx} className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Rua"
+                        value={e.rua}
+                        onChange={(ev) => updateEndereco(idx, "rua", ev.target.value)}
+                      />
+                      <Input
+                        placeholder="Número"
+                        value={e.numero}
+                        onChange={(ev) => updateEndereco(idx, "numero", ev.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Bairro"
+                        value={e.bairro}
+                        onChange={(ev) => updateEndereco(idx, "bairro", ev.target.value)}
+                      />
+                        <Input
+                          placeholder="Cidade"
+                          value={e.cidade}
+                          onChange={(ev) => updateEndereco(idx, "cidade", ev.target.value)}
+                        />
+                      <Input
+                        placeholder="Complemento"
+                        value={e.complemento ?? ""}
+                        onChange={(ev) => updateEndereco(idx, "complemento", ev.target.value)}
+                      />
+                    <div>
+                    </div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -282,10 +331,10 @@ export default function ListaClientes() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm max-w-xs truncate">{cliente.enderecos.map(e => e.logradouro).join(", ")}</span>
+                        <span className="text-sm max-w-xs truncate">{cliente.enderecos.map(e => `${e.rua}, ${e.numero} - ${e.bairro}${e.complemento ? `, ${e.complemento}` : ""} - ${e.cidade}`).join(" | ")}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{new Date(cliente.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                    <TableCell>{new Date(cliente.dataRegistro).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button variant="ghost" size="sm">
