@@ -34,14 +34,32 @@ import { getClientes } from "@/lib/api/clientes"
 import { getTecnicos } from "@/lib/api/tecnicos"
 import { getEquipamentosByCliente, createEquipamento } from "@/lib/api/equipamentos"
 import { getServicos } from "@/lib/api/servicos"
+import { getStatus } from "@/lib/api/status"
+import { getPrioridades } from "@/lib/api/prioridades"
 import type { OrdemServico, Cliente, Tecnico, Equipamento, Servico } from "@/lib/tipos"
-import { ordensServico } from "@/lib/dados-mockados"
+import { createOrdemServico, getOrdensServico } from "@/lib/api/ordem_servicos"
 import { Search, Eye, Plus, Check, ChevronsUpDown, ExternalLink } from "lucide-react"
 import { NaoEncontrado } from "./nao-encontrado"
 import { cn } from "@/lib/utils"
 
 export default function ListaOrdens() {
-  const [ordens, setOrdens] = useState<OrdemServico[]>(ordensServico)
+  const [ordens, setOrdens] = useState<OrdemServico[]>([])
+  const [loadingOrdens, setLoadingOrdens] = useState(false)
+    // Carregar ordens da API ao montar
+    useEffect(() => {
+      async function fetchOrdens() {
+        setLoadingOrdens(true)
+        try {
+          const data = await getOrdensServico()
+          setOrdens(data)
+        } catch (err) {
+          console.error("Erro ao carregar ordens de serviço:", err)
+        } finally {
+          setLoadingOrdens(false)
+        }
+      }
+      fetchOrdens()
+    }, [])
   const [busca, setBusca] = useState("")
   const [filtroStatus, setFiltroStatus] = useState("todos")
   const [filtroPrioridade, setFiltroPrioridade] = useState("todos")
@@ -68,6 +86,13 @@ export default function ListaOrdens() {
   const [loadingServicos, setLoadingServicos] = useState(false)
   const [openServicoCombo, setOpenServicoCombo] = useState(false)
 
+  // Estado para status
+  const [statusList, setStatusList] = useState<{ id: string; nome: string }[]>([])
+  const [loadingStatus, setLoadingStatus] = useState(false)
+  // Estado para prioridades
+  const [prioridadesList, setPrioridadesList] = useState<{ id: string; nome: string }[]>([])
+  const [loadingPrioridades, setLoadingPrioridades] = useState(false)
+
   // Modal de Equipamento
   const [openEquipModal, setOpenEquipModal] = useState(false)
   const [savingEquip, setSavingEquip] = useState(false)
@@ -86,7 +111,8 @@ export default function ListaOrdens() {
     equipamentoId: "",
     servicoIds: [] as string[],
     descricao: "",
-    prioridade: "media" as const,
+    prioridade: "" as string, // agora armazena o id
+    status: "" as string, // agora armazena o id
     dataAgendamento: "",
     custoEstimado: "",
     notas: "",
@@ -98,8 +124,22 @@ export default function ListaOrdens() {
       if (clientes.length === 0) fetchClientes()
       if (tecnicos.length === 0) fetchTecnicos()
       if (servicos.length === 0) fetchServicos()
+      if (statusList.length === 0) fetchStatus()
+      if (prioridadesList.length === 0) fetchPrioridades()
     }
   }, [open])
+
+  const fetchPrioridades = async () => {
+    try {
+      setLoadingPrioridades(true)
+      const data = await getPrioridades()
+      setPrioridadesList(data)
+    } catch (err) {
+      console.error("Erro ao carregar prioridades:", err)
+    } finally {
+      setLoadingPrioridades(false)
+    }
+  }
 
   useEffect(() => {
     // Sempre que abrir a modal de equipamento, vincula o cliente escolhido
@@ -166,6 +206,18 @@ export default function ListaOrdens() {
     }
   }
 
+  const fetchStatus = async () => {
+    try {
+      setLoadingStatus(true)
+      const data = await getStatus()
+      setStatusList(data)
+    } catch (err) {
+      console.error("Erro ao carregar status:", err)
+    } finally {
+      setLoadingStatus(false)
+    }
+  }
+
   const resetNovaOrdem = () =>
     setNovaOrdem({
       clienteId: "",
@@ -174,6 +226,7 @@ export default function ListaOrdens() {
       servicoIds: [],
       descricao: "",
       prioridade: "media",
+      status: "pendente",
       dataAgendamento: "",
       custoEstimado: "",
       notas: "",
@@ -192,22 +245,21 @@ export default function ListaOrdens() {
   const handleAddOrdem = async () => {
     try {
       setSaving(true)
-      const novaOrdemCriada: OrdemServico = {
-        id: `OS-${Date.now()}`,
-        numeroOrdem: `OS-${String(ordens.length + 1).padStart(4, "0")}`,
-        clienteId: novaOrdem.clienteId,
-        tecnicoId: novaOrdem.tecnicoIds[0] || undefined,
-        equipamentoId: novaOrdem.equipamentoId || undefined,
+      // Monta o payload para a API
+      const payload = {
+        cliente_id: novaOrdem.clienteId,
+        tecnico_ids: novaOrdem.tecnicoIds,
+        equipamento_id: novaOrdem.equipamentoId || undefined,
+        servico_ids: novaOrdem.servicoIds,
         descricao: novaOrdem.descricao,
-        status: "pendente",
-        prioridade: novaOrdem.prioridade,
-        tarefas: [],
-        dataAbertura: new Date().toISOString(),
-        dataAgendamento: novaOrdem.dataAgendamento || undefined,
+        status_id: novaOrdem.status, // agora envia o id
+        prioridade_id: novaOrdem.prioridade, // agora envia o id
+        data_agendamento: novaOrdem.dataAgendamento || undefined,
+        custo_estimado: novaOrdem.custoEstimado ? parseFloat(novaOrdem.custoEstimado) : undefined,
         notas: novaOrdem.notas,
-        custoEstimado: novaOrdem.custoEstimado ? parseFloat(novaOrdem.custoEstimado) : undefined,
       }
-      setOrdens((prev) => [novaOrdemCriada, ...prev])
+      const criada = await createOrdemServico(payload)
+      setOrdens((prev) => [criada, ...prev])
       resetNovaOrdem()
       setOpen(false)
     } catch (e) {
@@ -244,7 +296,7 @@ export default function ListaOrdens() {
   const ordensFiltradas = useMemo(() => {
     return ordens.filter((ordem) => {
       const matchBusca =
-        ordem.numeroOrdem.toLowerCase().includes(busca.toLowerCase()) ||
+        ordem.numeroOrdem==busca ||
         ordem.descricao.toLowerCase().includes(busca.toLowerCase())
       const matchStatus = filtroStatus === "todos" || ordem.status === filtroStatus
       const matchPrioridade = filtroPrioridade === "todos" || ordem.prioridade === filtroPrioridade
@@ -663,21 +715,40 @@ export default function ListaOrdens() {
                   )}
                 </div>
 
-                {/* Prioridade */}
+                {/* Status */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Prioridade *</label>
+                  <label className="text-sm font-medium">Status *</label>
                   <Select
-                    value={novaOrdem.prioridade}
-                    onValueChange={(v) => setNovaOrdem((s) => ({ ...s, prioridade: v as any }))}
+                    value={novaOrdem.status}
+                    onValueChange={(v) => setNovaOrdem((s) => ({ ...s, status: v }))}
+                    disabled={loadingStatus}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="baixa">Baixa</SelectItem>
-                      <SelectItem value="media">Média</SelectItem>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="critica">Crítica</SelectItem>
+                      {statusList.map((status) => (
+                        <SelectItem key={status.id} value={status.id}>{status.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Prioridade */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Prioridade *</label>
+                  <Select
+                    value={novaOrdem.prioridade}
+                    onValueChange={(v) => setNovaOrdem((s) => ({ ...s, prioridade: v }))}
+                    disabled={loadingPrioridades}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {prioridadesList.map((prioridade) => (
+                        <SelectItem key={prioridade.id} value={prioridade.id}>{prioridade.descricao}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -916,17 +987,19 @@ export default function ListaOrdens() {
                 <TableBody>
                   {ordensFiltradas.map((ordem) => (
                     <TableRow key={ordem.id}>
-                      <TableCell className="font-mono font-bold text-primary">{ordem.numeroOrdem}</TableCell>
+                      <TableCell className="font-mono font-bold text-primary">{ordem.id}</TableCell>
                       <TableCell className="max-w-xs truncate">{ordem.descricao}</TableCell>
                       <TableCell>
-                        <Badge className={getBadgeStatus(ordem.status)}>{ordem.status.replace("_", " ")}</Badge>
+                        <Badge className={getBadgeStatus(ordem.status_id)}>{ordem.status_id}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getBadgePrioridade(ordem.prioridade)}>{ordem.prioridade}</Badge>
+                        <Badge className={getBadgePrioridade(ordem.prioridade_id)}>{ordem.prioridade_id}</Badge>
                       </TableCell>
-                      <TableCell>{ordem.clienteId}</TableCell>
+                      <TableCell>{
+                        clientes.find((c) => String(c.id) === String(ordem.clienteId))?.nome || ordem.clienteId
+                      }</TableCell>
                       <TableCell>
-                        {ordem.dataAgendamento ? new Date(ordem.dataAgendamento).toLocaleDateString("pt-BR") : "-"}
+                        {ordem.data_agendamento ? new Date(ordem.data_agendamento).toLocaleDateString("pt-BR") : "-"}
                       </TableCell>
                       <TableCell>
                         <Link href={`/ordens/${ordem.id}`}>
