@@ -19,7 +19,54 @@ import {
 import { ArrowLeft, Edit, Trash2, Plus, Clock, CheckCircle } from "lucide-react"
 import type { Tarefa } from "@/lib/tipos"
 import { tenicosMock, clientesMock } from "@/lib/dados-mockados"
-import { getOrdemServicoById } from "@/lib/api/ordem_servicos"
+import { getOrdemServicoById, updateOrdemServicoStatus } from "@/lib/api/ordem_servicos"
+
+// Opções de status disponíveis
+const statusOptions = [
+  { id: 1, label: "Pendente" },
+  { id: 2, label: "Em Progresso" },
+  { id: 3, label: "Concluído" },
+  { id: 4, label: "Cancelado" },
+  { id: 5, label: "Não Iniciada" },
+  { id: 6, label: "Em Andamento" },
+  { id: 7, label: "Bloqueada" },
+]
+
+type StatusSelectProps = {
+  ordemId: number | string
+  statusAtual: number
+  onStatusChange: (novoStatusId: number) => void | Promise<void>
+}
+
+function StatusSelect({ ordemId, statusAtual, onStatusChange }: StatusSelectProps) {
+  const [value, setValue] = useState(statusAtual)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setValue(statusAtual)
+  }, [statusAtual])
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const novoStatusId = Number(e.target.value)
+    setLoading(true)
+    setValue(novoStatusId)
+    await onStatusChange(novoStatusId)
+    setLoading(false)
+  }
+
+  return (
+    <select
+      className="border rounded px-2 py-1 text-sm"
+      value={value}
+      onChange={handleChange}
+      disabled={loading}
+    >
+      {statusOptions.map((opt) => (
+        <option key={opt.id} value={opt.id}>{opt.label}</option>
+      ))}
+    </select>
+  )
+}
 
 interface DetalheOrdemProps {
   ordemId: string
@@ -114,10 +161,6 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
         <div className="flex-1">
           <h1 className="text-3xl font-bold">OS Número: {ordem.id}</h1>
         </div>
-        <Button variant="outline" size="sm">
-          <Edit className="h-4 w-4 mr-2" />
-          Editar
-        </Button>
       </div>
 
       {/* Grid principal */}
@@ -134,7 +177,15 @@ export default function DetalheOrdem({ ordemId }: DetalheOrdemProps) {
                 <div>
                   <label className="text-sm text-muted-foreground">Status</label>
                   <div className="mt-1">
-                    <Badge className={getBadgeStatus(ordem.status_descricao)}>{ordem.status_descricao}</Badge>
+                    <StatusSelect
+                      ordemId={ordem.id}
+                      statusAtual={ordem.status_id}
+                      onStatusChange={async (novoStatusId: number) => {
+                        await updateOrdemServicoStatus(ordem.id, novoStatusId)
+                        const data = await getOrdemServicoById(ordemId)
+                        setOrdem(data)
+                      }}
+                    />
                   </div>
                 </div>
                 <div>
