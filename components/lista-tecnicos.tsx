@@ -28,6 +28,7 @@ export default function ListaTecnicos() {
 
   const [novoTecnico, setNovoTecnico] = useState({
     nome: "",
+    cpf: "",
     telefone: "",
     especialidades: [] as string[],
     especialidadeInput: "",
@@ -69,6 +70,7 @@ export default function ListaTecnicos() {
   const resetNovoTecnico = () =>
     setNovoTecnico({
       nome: "",
+      cpf: "",
       telefone: "",
       especialidades: [],
       especialidadeInput: "",
@@ -79,6 +81,7 @@ export default function ListaTecnicos() {
       setSaving(true)
       const criado = await createTecnico({
         nome: novoTecnico.nome.trim(),
+        cpf: novoTecnico.cpf.trim(),
         telefone: novoTecnico.telefone.trim(),
         especialidades: novoTecnico.especialidades,
       })
@@ -99,6 +102,7 @@ export default function ListaTecnicos() {
   const tecnicosFiltrados = tecnicos.filter(
     (t) =>
       t.nome.toLowerCase().includes(busca.toLowerCase()) ||
+      t.cpf?.toLowerCase().includes(busca.toLowerCase()) ||
       t.telefone.toLowerCase().includes(busca.toLowerCase()),
   )
 
@@ -126,6 +130,11 @@ export default function ListaTecnicos() {
                 placeholder="Nome completo"
                 value={novoTecnico.nome}
                 onChange={(e) => setNovoTecnico((s) => ({ ...s, nome: e.target.value }))}
+              />
+              <Input
+                placeholder="CPF (apenas números)"
+                value={novoTecnico.cpf}
+                onChange={(e) => setNovoTecnico((s) => ({ ...s, cpf: e.target.value }))}
               />
               <Input
                 placeholder="Telefone"
@@ -158,7 +167,7 @@ export default function ListaTecnicos() {
               <Button
                 className="w-full"
                 onClick={handleAddTecnico}
-                disabled={saving || !novoTecnico.nome.trim() || !novoTecnico.telefone.trim()}
+                disabled={saving || !novoTecnico.nome.trim() || !novoTecnico.cpf.trim() || !novoTecnico.telefone.trim()}
               >
                 {saving ? "Salvando..." : "Adicionar"}
               </Button>
@@ -172,7 +181,7 @@ export default function ListaTecnicos() {
           <CardTitle>Filtrar</CardTitle>
         </CardHeader>
         <CardContent>
-          <Input placeholder="Buscar por nome ou email..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <Input placeholder="Buscar por nome, CPF ou telefone..." value={busca} onChange={(e) => setBusca(e.target.value)} />
         </CardContent>
       </Card>
 
@@ -186,6 +195,7 @@ export default function ListaTecnicos() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>CPF</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Especialidades</TableHead>
                   <TableHead>Ações</TableHead>
@@ -195,6 +205,7 @@ export default function ListaTecnicos() {
                 {tecnicosFiltrados.map((tecnico) => (
                   <TableRow key={tecnico.id}>
                     <TableCell className="font-medium">{tecnico.nome}</TableCell>
+                    <TableCell>{tecnico.cpf || "-"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-muted-foreground" />
